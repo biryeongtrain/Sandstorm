@@ -268,7 +268,7 @@ public class ParticleElement extends ItemDisplayElement {
         if (this.getHolder() == null) {
             return;
         }
-        Packet<ClientGamePacketListener> packet = null;
+        Packet<ClientGamePacketListener> packet;
         var pos = this.getCurrentPos();
 
         if (pos.equals(this.lastSyncedPos)) {
@@ -288,8 +288,8 @@ public class ParticleElement extends ItemDisplayElement {
         }
 
         Packet<ClientGamePacketListener> packet2 = null;
-        if (this.dataTracker.isDirty()) {
-            var dirty = this.dataTracker.getDirtyEntries();
+        if (this.syncedData.isDirty()) {
+            var dirty = this.syncedData.getDirtyEntries();
             if (dirty != null) {
                 packet2 = new ClientboundSetEntityDataPacket(this.getEntityId(), dirty);
             }

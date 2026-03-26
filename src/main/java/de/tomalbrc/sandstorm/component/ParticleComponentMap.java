@@ -3,7 +3,7 @@ package de.tomalbrc.sandstorm.component;
 import com.google.gson.*;
 import de.tomalbrc.sandstorm.Sandstorm;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Type;
@@ -50,16 +50,16 @@ public class ParticleComponentMap {
             JsonObject object = jsonElement.getAsJsonObject();
             ParticleComponentMap particleComponentMap = new ParticleComponentMap();
             for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
-                ResourceLocation resourceLocation;
+                Identifier id;
                 if (entry.getKey().contains(":"))
-                    resourceLocation = ResourceLocation.parse(entry.getKey());
+                    id = Identifier.parse(entry.getKey());
                 else
-                    resourceLocation = ResourceLocation.withDefaultNamespace(entry.getKey());
+                    id = Identifier.withDefaultNamespace(entry.getKey());
 
-                ParticleComponentType<ParticleComponent<?>> componentType = ParticleComponentRegistry.getType(resourceLocation);
+                ParticleComponentType<ParticleComponent<?>> componentType = ParticleComponentRegistry.getType(id);
 
                 if (componentType == null) {
-                    Sandstorm.LOGGER.error("Could not load particle component {}", resourceLocation);
+                    Sandstorm.LOGGER.error("Could not load particle component {}", id);
                     continue;
                 }
 
@@ -71,7 +71,7 @@ public class ParticleComponentMap {
                     deserialized = jsonDeserializationContext.deserialize(entry.getValue(), componentType.type());
                 }
 
-                particleComponentMap.put(ParticleComponentRegistry.getType(resourceLocation), deserialized);
+                particleComponentMap.put(ParticleComponentRegistry.getType(id), deserialized);
             }
             return particleComponentMap;
         }

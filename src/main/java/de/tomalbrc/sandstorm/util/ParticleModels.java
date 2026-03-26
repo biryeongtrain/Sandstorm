@@ -16,7 +16,7 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Items;
 import org.joml.Vector2i;
 import org.joml.Vector4i;
@@ -33,7 +33,7 @@ import java.util.UUID;
 
 public class ParticleModels {
     private static final Map<ParticleEffectFile, Int2ObjectArrayMap<ModelData>> POLYMER_MODEL_DATA = new Object2ObjectOpenHashMap<>();
-    private static final Map<ResourceLocation, byte[]> DATA = new Object2ObjectOpenHashMap<>();
+    private static final Map<Identifier, byte[]> DATA = new Object2ObjectOpenHashMap<>();
     private static final Map<String, byte[]> TEXTURE_DATA = new Object2ObjectOpenHashMap<>();
 
     public static ModelData modelData(ParticleEffectFile effectFile, int flipbookRnd, float normalizedLifetime, MolangEnvironment environment) throws MolangRuntimeException {
@@ -54,7 +54,7 @@ public class ParticleModels {
             return map.get((int)((containsRndIndex ? rndIndex : 0) + Math.min(normalizedLifetime, 1.0) * (max-1)));
         }
 
-        int idx = (int) (Math.random() * (map.keySet().size())-1);
+        int idx = (int) (Math.random() * (map.size())-1);
         return map.get(map.keySet().toIntArray()[idx]);
     }
 
@@ -72,7 +72,7 @@ public class ParticleModels {
     }
 
     public static void addToResourcePack(ResourcePackBuilder builder) {
-        for (Map.Entry<ResourceLocation, byte[]> entry : DATA.entrySet()) {
+        for (Map.Entry<Identifier, byte[]> entry : DATA.entrySet()) {
             builder.addData(AssetPaths.itemModel(entry.getKey()), entry.getValue());
             builder.addData(AssetPaths.itemAsset(entry.getKey()), new ItemAsset(new BasicItemModel(entry.getKey().withPrefix("item/"), List.of(new DyeTintSource(0xFFFFFF))), ItemAsset.Properties.DEFAULT).toBytes());
         }
@@ -125,9 +125,9 @@ public class ParticleModels {
                         String texturePath = "textures/item/" + id + ".png";
                         String modelPath = "models/item/" + id + ".json";
                         TEXTURE_DATA.put(texturePath, out.toByteArray());
-                        DATA.put(ResourceLocation.fromNamespaceAndPath(Sandstorm.MOD_ID, id.toString()), getModel("sandstorm:item/" + id, emissive));
+                        DATA.put(Identifier.fromNamespaceAndPath(Sandstorm.MOD_ID, id.toString()), getModel("sandstorm:item/" + id, emissive));
 
-                        map.put(map.size(), new ModelData(Items.LEATHER_HORSE_ARMOR, ResourceLocation.fromNamespaceAndPath(Sandstorm.MOD_ID, id.toString())));
+                        map.put(map.size(), new ModelData(Items.LEATHER_HORSE_ARMOR, Identifier.fromNamespaceAndPath(Sandstorm.MOD_ID, id.toString())));
                     }
                 }
             }
@@ -141,9 +141,9 @@ public class ParticleModels {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             if (ImageIO.write(image, "png", out)) {
                 TEXTURE_DATA.put(texturePath, out.toByteArray());
-                DATA.put(ResourceLocation.fromNamespaceAndPath(Sandstorm.MOD_ID, id.toString()), getModel("sandstorm:item/" + id, emissive));
+                DATA.put(Identifier.fromNamespaceAndPath(Sandstorm.MOD_ID, id.toString()), getModel("sandstorm:item/" + id, emissive));
 
-                map.put(map.size(), new ModelData(Items.LEATHER_HORSE_ARMOR, ResourceLocation.fromNamespaceAndPath(Sandstorm.MOD_ID, id.toString())));
+                map.put(map.size(), new ModelData(Items.LEATHER_HORSE_ARMOR, Identifier.fromNamespaceAndPath(Sandstorm.MOD_ID, id.toString())));
                 POLYMER_MODEL_DATA.put(effectFile, map);
             }
         }
@@ -191,9 +191,9 @@ public class ParticleModels {
                         String texturePath = "textures/item/" + id + ".png";
                         String modelPath = "models/item/" + id + ".json";
                         TEXTURE_DATA.put(texturePath, out.toByteArray());
-                        DATA.put(ResourceLocation.fromNamespaceAndPath(Sandstorm.MOD_ID, id.toString()), getModel("sandstorm:item/" + id, emissive));
+                        DATA.put(Identifier.fromNamespaceAndPath(Sandstorm.MOD_ID, id.toString()), getModel("sandstorm:item/" + id, emissive));
 
-                        map.put(realI*1000 + currentFrame, new ModelData(Items.LEATHER_HORSE_ARMOR, ResourceLocation.fromNamespaceAndPath(Sandstorm.MOD_ID,id.toString())));
+                        map.put(realI*1000 + currentFrame, new ModelData(Items.LEATHER_HORSE_ARMOR, Identifier.fromNamespaceAndPath(Sandstorm.MOD_ID,id.toString())));
                     }
                 } // fori
 

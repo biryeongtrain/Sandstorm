@@ -41,7 +41,7 @@ public class Sandstorm implements ModInitializer {
 
         loadFromConfig();
 
-        CommandRegistrationCallback.EVENT.register((dispatcher, context, selection) -> {
+        CommandRegistrationCallback.EVENT.register((dispatcher, _, _) -> {
             SandstormCommand.register(dispatcher);
         });
 
@@ -62,7 +62,7 @@ public class Sandstorm implements ModInitializer {
                     });
         } catch (IOException e) {
             Sandstorm.LOGGER.error("Could not access 'particle' folder!");
-        };
+        }
     }
 
     public static void createDirectoryStructure() {

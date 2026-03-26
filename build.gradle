@@ -1,6 +1,6 @@
 plugins {
-    id 'fabric-loom' version '1.10-SNAPSHOT'
-    id 'com.github.johnrengelman.shadow' version "8.1.1"
+    id 'net.fabricmc.fabric-loom' version '1.15.+'
+    id 'com.gradleup.shadow' version "9.3.2"
     id 'maven-publish'
 }
 
@@ -25,19 +25,18 @@ repositories {
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings loom.officialMojangMappings()
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
     // Fabric API
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
     // Polymer
-    modImplementation("eu.pb4:polymer-core:${project.polymer_version}")
-    modImplementation("eu.pb4:polymer-networking:${project.polymer_version}")
-    modImplementation("eu.pb4:polymer-resource-pack:${project.polymer_version}")
-    modImplementation("eu.pb4:polymer-resource-pack-extras:${project.polymer_version}")
-    modImplementation("eu.pb4:polymer-virtual-entity:${project.polymer_version}")
-    modRuntimeOnly("eu.pb4:polymer-autohost:${project.polymer_version}")
+    implementation("eu.pb4:polymer-core:${project.polymer_version}")
+    implementation("eu.pb4:polymer-networking:${project.polymer_version}")
+    implementation("eu.pb4:polymer-resource-pack:${project.polymer_version}")
+    implementation("eu.pb4:polymer-resource-pack-extras:${project.polymer_version}")
+    implementation("eu.pb4:polymer-virtual-entity:${project.polymer_version}")
+    runtimeOnly("eu.pb4:polymer-autohost:${project.polymer_version}")
 
     // Molang
     implementation shade("gg.moonflower:molang-compiler:${project.molang_compiler_version}") {
@@ -45,9 +44,9 @@ dependencies {
     }
 
     // Permission API
-    modImplementation shade('me.lucko:fabric-permissions-api:0.3.3') {
-        exclude group: "net.fabricmc", module: "fabric-loader"
-    }
+//    implementation shade('me.lucko:fabric-permissions-api:0.7.0') {
+//        exclude group: "net.fabricmc", module: "fabric-loader"
+//    }
 }
 
 shadowJar {
@@ -55,11 +54,6 @@ shadowJar {
     exclude('META-INF/**')
     exclude('net/**')
     archiveClassifier.set("shadow")
-}
-
-remapJar {
-    dependsOn(shadowJar)
-    input.set(shadowJar.archivePath)
 }
 
 
@@ -76,7 +70,7 @@ processResources {
     }
 }
 
-def targetJavaVersion = 21
+def targetJavaVersion = 25
 tasks.withType(JavaCompile).configureEach {
     // ensure that the encoding is set to UTF-8, no matter what the system default is
     // this fixes some edge cases with special characters not displaying correctly
@@ -98,6 +92,7 @@ java {
 }
 
 jar {
+    dependsOn(shadowJar)
     from("LICENSE") {
         rename { "${it}_${project.archivesBaseName}"}
     }
@@ -107,12 +102,8 @@ jar {
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifact(remapJar) {
-                builtBy remapJar
-            }
             artifact(sourcesJar) {
                 classifier "sources"
-                builtBy remapSourcesJar
             }
         }
     }
