@@ -10,21 +10,22 @@ import de.tomalbrc.sandstorm.component.particle.ParticleMotionDynamic;
 import de.tomalbrc.sandstorm.component.particle.ParticleMotionParametric;
 import de.tomalbrc.sandstorm.util.ParticleModels;
 import eu.pb4.polymer.virtualentity.api.VirtualEntityUtils;
-import eu.pb4.polymer.virtualentity.api.elements.ItemDisplayElement;
+import eu.pb4.polymer.virtualentity.api.elements.TextDisplayElement;
 import gg.moonflower.molangcompiler.api.MolangExpression;
 import gg.moonflower.molangcompiler.api.MolangRuntime;
 import gg.moonflower.molangcompiler.api.exception.MolangRuntimeException;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.contents.objects.AtlasSprite;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.*;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.Brightness;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.PositionMoveRotation;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.DyedItemColor;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -34,8 +35,11 @@ import org.joml.Vector3f;
 import java.util.List;
 import java.util.Objects;
 
-public class ParticleElement extends ItemDisplayElement {
+public class ParticleElement extends TextDisplayElement {
     private static final double MAX_COLLISION_VELOCITY = Mth.square(100.0);
+    // TextDisplay object glyphs render materially smaller than the old ItemDisplay path,
+    // so we compensate here to preserve the perceived particle density.
+    private static final float TEXT_SCALE_FACTOR = 5.5f;
 
     private float maxLifetime;
     private MolangExpression lifetimeExpression;
@@ -64,7 +68,9 @@ public class ParticleElement extends ItemDisplayElement {
     private boolean rotationDirty = true;
 
     private final ParticleEffectHolder parent;
-    private ItemStack item;
+    private Identifier sprite;
+    private int textColor = 0xFF_FF_FF;
+    private byte textOpacity = (byte) 0xFF;
 
     public ParticleElement(ParticleEffectHolder particleEffectHolder) throws MolangRuntimeException {
         this.parent = particleEffectHolder;
@@ -78,7 +84,7 @@ public class ParticleElement extends ItemDisplayElement {
 
         this.updateRuntimePerParticle(this.parent.runtime());
 
-        this.item = ParticleModels.modelData(particleEffectHolder.getEffectFile(), (int)(this.random_1*10), 0, this.parent.runtime()).asItemStack();
+        this.sprite = ParticleModels.frameData(particleEffectHolder.getEffectFile(), (int) (this.random_1 * 10), 0, this.parent.runtime()).sprite();
 
         var billboard = this.parent.get(ParticleComponents.PARTICLE_APPEARANCE_BILLBOARD);
         if (billboard != null) {
@@ -92,6 +98,13 @@ public class ParticleElement extends ItemDisplayElement {
         this.setDisplaySize(0.5f, 0.5f);
         this.setInterpolationDuration(2);
         this.setTeleportDuration(1);
+        this.setLineWidth(2_048);
+        this.setTextOpacity(this.textOpacity);
+        this.setBackground(0);
+        this.setShadow(false);
+        this.setDefaultBackground(false);
+        this.setTextAlignment(Display.TextDisplay.Align.CENTER);
+        this.setText(buildText(this.sprite, this.textColor));
 
         if (!this.parent.has(ParticleComponents.PARTICLE_APPEARANCE_LIGHTING))
             this.setBrightness(Brightness.FULL_BRIGHT);
@@ -356,57 +369,64 @@ public class ParticleElement extends ItemDisplayElement {
     private void updateElementTick() throws MolangRuntimeException {
         this.setLeftRotation(new Quaternionf().rotateZ(this.roll * Mth.DEG_TO_RAD));
 
-        if (this.getItem() != this.item) {
-            this.item.set(DataComponents.DYED_COLOR, new DyedItemColor(0xFF_FF_FF));
-            this.setItem(this.item);
-        }
-
         var billboard = this.get(ParticleComponents.PARTICLE_APPEARANCE_BILLBOARD);
         if (billboard != null && !billboard.size.isEmpty()) {
             var size = billboard.size;
             var x = this.parent.runtime().resolve(size.get(0));
             var y = this.parent.runtime().resolve(size.get(1));
-            var scale = new Vector3f(Float.isNaN(x) ? 0 : x * 2.f, Float.isNaN(y) ? 0 : y * 2.f, 1);
+            var scale = new Vector3f(Float.isNaN(x) ? 0 : x * TEXT_SCALE_FACTOR, Float.isNaN(y) ? 0 : y * TEXT_SCALE_FACTOR, 1);
             if (!this.getScale().equals(scale, 0.0001f)) {
                 this.setScale(scale);
             }
         }
 
+        Identifier sprite = this.sprite;
         if (billboard != null && billboard.uv.flipbook != null) {
             if (billboard.uv.flipbook.stretch_to_lifetime) {
                 float nLifetime = scaledAge() / this.maxLifetime;
-                var newStack = ParticleModels.modelData(this.parent.getEffectFile(), (int)(this.random_1*10), nLifetime, this.parent.runtime()).asItemStack();
-                if (!Objects.equals(this.item.get(DataComponents.ITEM_MODEL), newStack.get(DataComponents.ITEM_MODEL))) {
-                    newStack.set(DataComponents.DYED_COLOR, this.item.get(DataComponents.DYED_COLOR));
-                    this.item = newStack;
-                    this.setItem(this.item);
-                }
+                sprite = ParticleModels.frameData(this.parent.getEffectFile(), (int) (this.random_1 * 10), nLifetime, this.parent.runtime()).sprite();
             } else {
-                var frame = (int)(scaledAge() / (1.f/billboard.uv.flipbook.frames_per_second));
-                var max = (int)this.parent.runtime().resolve(billboard.uv.flipbook.max_frame);
+                var frame = (int) (scaledAge() / (1.f / billboard.uv.flipbook.frames_per_second));
+                var max = (int) this.parent.runtime().resolve(billboard.uv.flipbook.max_frame);
                 int index = billboard.uv.flipbook.loop ? frame % max : Math.min(frame, max - 1);
-                var newStack = ParticleModels.modelData(this.parent.getEffectFile(), (int)(this.random_1*10), index).asItemStack();
-                if (!Objects.equals(this.item.get(DataComponents.ITEM_MODEL), newStack.get(DataComponents.ITEM_MODEL))) {
-                    newStack.set(DataComponents.DYED_COLOR, this.item.get(DataComponents.DYED_COLOR));
-                    this.item = newStack;
-                    this.setItem(this.item);
-                }
+                sprite = ParticleModels.frameData(this.parent.getEffectFile(), (int) (this.random_1 * 10), index).sprite();
             }
         }
 
+        int color = 0xFF_FF_FF;
+        byte opacity = (byte) 0xFF;
         if (this.parent.has(ParticleComponents.PARTICLE_APPEARANCE_TINTING)) {
             var tinting = this.parent.get(ParticleComponents.PARTICLE_APPEARANCE_TINTING);
             if (tinting.isRGBA()) {
-                this.item.set(DataComponents.DYED_COLOR, new DyedItemColor(tinting.rgba(this.parent.runtime())));
+                int argb = tinting.rgba(this.parent.runtime());
+                color = argb & 0xFF_FF_FF;
+                opacity = (byte) ((argb >>> 24) & 0xFF);
             }
             else {
-                var color = this.parent.get(ParticleComponents.PARTICLE_APPEARANCE_TINTING).color.color(this.parent.runtime());
-                this.item.set(DataComponents.DYED_COLOR, new DyedItemColor(color));
+                color = this.parent.get(ParticleComponents.PARTICLE_APPEARANCE_TINTING).color.color(this.parent.runtime()) & 0xFF_FF_FF;
             }
-            this.setItem(this.item);
         }
 
+        this.applyVisual(sprite, color, opacity);
         this.startInterpolationIfDirty();
+    }
+
+    private void applyVisual(Identifier sprite, int color, byte opacity) {
+        if (!Objects.equals(this.sprite, sprite) || this.textColor != color) {
+            this.sprite = sprite;
+            this.textColor = color;
+            this.setText(buildText(sprite, color));
+        }
+
+        if (this.textOpacity != opacity) {
+            this.textOpacity = opacity;
+            this.setTextOpacity(opacity);
+        }
+    }
+
+    private static Component buildText(Identifier sprite, int color) {
+        return Component.object(new AtlasSprite(ParticleModels.atlasId(), sprite))
+                .withStyle(Style.EMPTY.withColor(color).withoutShadow());
     }
 
     public void remove() {

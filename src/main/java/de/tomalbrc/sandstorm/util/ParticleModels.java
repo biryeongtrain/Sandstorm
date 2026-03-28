@@ -4,11 +4,7 @@ import de.tomalbrc.sandstorm.Sandstorm;
 import de.tomalbrc.sandstorm.component.ParticleComponents;
 import de.tomalbrc.sandstorm.component.particle.ParticleAppearanceBillboard;
 import de.tomalbrc.sandstorm.io.ParticleEffectFile;
-import eu.pb4.polymer.resourcepack.api.AssetPaths;
 import eu.pb4.polymer.resourcepack.api.ResourcePackBuilder;
-import eu.pb4.polymer.resourcepack.extras.api.format.item.ItemAsset;
-import eu.pb4.polymer.resourcepack.extras.api.format.item.model.BasicItemModel;
-import eu.pb4.polymer.resourcepack.extras.api.format.item.tint.DyeTintSource;
 import gg.moonflower.molangcompiler.api.MolangEnvironment;
 import gg.moonflower.molangcompiler.api.MolangRuntime;
 import gg.moonflower.molangcompiler.api.exception.MolangRuntimeException;
@@ -17,7 +13,6 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.item.Items;
 import org.joml.Vector2i;
 import org.joml.Vector4i;
 
@@ -27,42 +22,68 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 public class ParticleModels {
-    private static final Map<ParticleEffectFile, Int2ObjectArrayMap<ModelData>> POLYMER_MODEL_DATA = new Object2ObjectOpenHashMap<>();
-    private static final Map<Identifier, byte[]> DATA = new Object2ObjectOpenHashMap<>();
-    private static final Map<String, byte[]> TEXTURE_DATA = new Object2ObjectOpenHashMap<>();
+    private static final Identifier PARTICLE_ATLAS = Identifier.fromNamespaceAndPath("minecraft", "gui");
+    private static final String ATLAS_PATH = "assets/minecraft/atlases/gui.json";
+    private static final byte[] ATLAS_DATA = """
+            {
+              "sources": [
+                {
+                  "type": "minecraft:directory",
+                  "prefix": "",
+                  "source": "gui/sprites"
+                },
+                {
+                  "type": "minecraft:directory",
+                  "prefix": "mob_effect/",
+                  "source": "mob_effect"
+                },
+                {
+                  "type": "minecraft:directory",
+                  "prefix": "sandstorm/generated/",
+                  "source": "gui/sandstorm/generated"
+                }
+              ]
+            }
+            """.getBytes(StandardCharsets.UTF_8);
 
-    public static ModelData modelData(ParticleEffectFile effectFile, int flipbookRnd, float normalizedLifetime, MolangEnvironment environment) throws MolangRuntimeException {
+    private static final Map<ParticleEffectFile, Int2ObjectArrayMap<SpriteFrame>> FRAME_DATA = new Object2ObjectOpenHashMap<>();
+    private static final Map<String, byte[]> RESOURCE_DATA = new Object2ObjectOpenHashMap<>();
+
+    public static Identifier atlasId() {
+        return PARTICLE_ATLAS;
+    }
+
+    public static SpriteFrame frameData(ParticleEffectFile effectFile, int flipbookRnd, float normalizedLifetime, MolangEnvironment environment) throws MolangRuntimeException {
         var billboard = effectFile.effect.components.get(ParticleComponents.PARTICLE_APPEARANCE_BILLBOARD);
-        var map = POLYMER_MODEL_DATA.get(effectFile);
+        var map = FRAME_DATA.get(effectFile);
         if (billboard != null && billboard.uv != null && billboard.uv.flipbook != null && billboard.uv.flipbook.stretch_to_lifetime) {
             var max = environment.resolve(billboard.uv.flipbook.max_frame);
 
-            int rndIndex = flipbookRnd*1000;
+            int rndIndex = flipbookRnd * 1000;
             boolean containsRndIndex = false;
-            for (Int2ObjectMap.Entry<ModelData> entry : map.int2ObjectEntrySet()) {
+            for (Int2ObjectMap.Entry<SpriteFrame> entry : map.int2ObjectEntrySet()) {
                 if (entry.getIntKey() == rndIndex) {
                     containsRndIndex = true;
                     break;
                 }
             }
 
-            return map.get((int)((containsRndIndex ? rndIndex : 0) + Math.min(normalizedLifetime, 1.0) * (max-1)));
+            return map.get((int) ((containsRndIndex ? rndIndex : 0) + Math.min(normalizedLifetime, 1.0f) * (max - 1)));
         }
 
-        int idx = (int) (Math.random() * (map.size())-1);
+        int idx = map.size() <= 1 ? 0 : (int) (Math.random() * map.size());
         return map.get(map.keySet().toIntArray()[idx]);
     }
 
-    public static ModelData modelData(ParticleEffectFile effectFile, int flipbookRnd, int index) {
-        var list = POLYMER_MODEL_DATA.get(effectFile);
-        int rndIndex = flipbookRnd*1000;
+    public static SpriteFrame frameData(ParticleEffectFile effectFile, int flipbookRnd, int index) {
+        var list = FRAME_DATA.get(effectFile);
+        int rndIndex = flipbookRnd * 1000;
         boolean containsRndIndex = false;
-        for (Int2ObjectMap.Entry<ModelData> entry : list.int2ObjectEntrySet()) {
+        for (Int2ObjectMap.Entry<SpriteFrame> entry : list.int2ObjectEntrySet()) {
             if (entry.getIntKey() == rndIndex) {
                 containsRndIndex = true;
                 break;
@@ -72,27 +93,22 @@ public class ParticleModels {
     }
 
     public static void addToResourcePack(ResourcePackBuilder builder) {
-        for (Map.Entry<Identifier, byte[]> entry : DATA.entrySet()) {
-            builder.addData(AssetPaths.itemModel(entry.getKey()), entry.getValue());
-            builder.addData(AssetPaths.itemAsset(entry.getKey()), new ItemAsset(new BasicItemModel(entry.getKey().withPrefix("item/"), List.of(new DyeTintSource(0xFFFFFF))), ItemAsset.Properties.DEFAULT).toBytes());
+        RESOURCE_DATA.put(ATLAS_PATH, ATLAS_DATA);
+        for (Map.Entry<String, byte[]> entry : RESOURCE_DATA.entrySet()) {
+            builder.addData(entry.getKey(), entry.getValue());
         }
-        for (Map.Entry<String, byte[]> entry : TEXTURE_DATA.entrySet()) {
-            builder.addData("assets/sandstorm/" + entry.getKey(), entry.getValue());
-        }
-        DATA.clear();
     }
 
     public static void addFrom(ParticleEffectFile effectFile, InputStream imageStream) throws IOException, MolangRuntimeException {
         var billboard = effectFile.effect.components.get(ParticleComponents.PARTICLE_APPEARANCE_BILLBOARD);
-        var emissive = !effectFile.effect.components.has(ParticleComponents.PARTICLE_APPEARANCE_LIGHTING);
 
         BufferedImage image = ImageIO.read(imageStream);
-        handleUV(effectFile, image, billboard, emissive);
-        handleLifetimeFlipbook(effectFile, image, billboard, emissive);
+        handleUV(effectFile, image, billboard);
+        handleLifetimeFlipbook(effectFile, image, billboard);
     }
 
-    private static void handleUV(ParticleEffectFile effectFile, BufferedImage image, ParticleAppearanceBillboard billboard, boolean emissive) throws IOException, MolangRuntimeException {
-        Int2ObjectArrayMap<ModelData> map = new Int2ObjectArrayMap<>();
+    private static void handleUV(ParticleEffectFile effectFile, BufferedImage image, ParticleAppearanceBillboard billboard) throws IOException, MolangRuntimeException {
+        Int2ObjectArrayMap<SpriteFrame> map = new Int2ObjectArrayMap<>();
         if (billboard != null && billboard.uv != null) {
             ObjectOpenHashSet<Vector4i> vecs = new ObjectOpenHashSet<>();
             for (int i = 0; i < 10; i++) {
@@ -119,37 +135,18 @@ public class ParticleModels {
                     vecs.add(n);
 
                     BufferedImage newImage = image.getSubimage(x, y, w, h);
-                    ByteArrayOutputStream out = new ByteArrayOutputStream();
-                    if (ImageIO.write(newImage, "png", out)) {
-                        UUID id = UUID.randomUUID();
-                        String texturePath = "textures/item/" + id + ".png";
-                        String modelPath = "models/item/" + id + ".json";
-                        TEXTURE_DATA.put(texturePath, out.toByteArray());
-                        DATA.put(Identifier.fromNamespaceAndPath(Sandstorm.MOD_ID, id.toString()), getModel("sandstorm:item/" + id, emissive));
-
-                        map.put(map.size(), new ModelData(Items.LEATHER_HORSE_ARMOR, Identifier.fromNamespaceAndPath(Sandstorm.MOD_ID, id.toString())));
-                    }
+                    map.put(map.size(), createFrame(newImage));
                 }
             }
-            POLYMER_MODEL_DATA.put(effectFile, map);
+            FRAME_DATA.put(effectFile, map);
         }
         else {
-            UUID id = UUID.randomUUID();
-            String texturePath = "textures/item/" + id + ".png";
-            String modelPath = "models/item/" + id + ".json";
-
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            if (ImageIO.write(image, "png", out)) {
-                TEXTURE_DATA.put(texturePath, out.toByteArray());
-                DATA.put(Identifier.fromNamespaceAndPath(Sandstorm.MOD_ID, id.toString()), getModel("sandstorm:item/" + id, emissive));
-
-                map.put(map.size(), new ModelData(Items.LEATHER_HORSE_ARMOR, Identifier.fromNamespaceAndPath(Sandstorm.MOD_ID, id.toString())));
-                POLYMER_MODEL_DATA.put(effectFile, map);
-            }
+            map.put(map.size(), createFrame(image));
+            FRAME_DATA.put(effectFile, map);
         }
     }
 
-    private static void handleLifetimeFlipbook(ParticleEffectFile effectFile, BufferedImage image, ParticleAppearanceBillboard billboard, boolean emissive) throws IOException, MolangRuntimeException {
+    private static void handleLifetimeFlipbook(ParticleEffectFile effectFile, BufferedImage image, ParticleAppearanceBillboard billboard) throws IOException, MolangRuntimeException {
         if (billboard != null && billboard.uv != null && billboard.uv.flipbook != null) {
             boolean normalized = billboard.uv.textureWidth == 1 || billboard.uv.textureHeight == 1;
             float xs = !normalized ? 1.f : (float) image.getWidth() / billboard.uv.textureWidth;
@@ -158,7 +155,7 @@ public class ParticleModels {
             ParticleAppearanceBillboard.Flipbook flipbook = billboard.uv.flipbook;
             int maxFrame = (int) flipbook.max_frame.getConstant();
 
-            Int2ObjectArrayMap<ModelData> map = new Int2ObjectArrayMap<>();
+            Int2ObjectArrayMap<SpriteFrame> map = new Int2ObjectArrayMap<>();
             ObjectOpenHashSet<Vector2i> vecs = new ObjectOpenHashSet<>();
             int realI = 0;
             for (int randomIterator = 0; randomIterator < 10; randomIterator++) {
@@ -185,35 +182,28 @@ public class ParticleModels {
                             (int) ((flipbook.size_UV[1]) * ys)
                     );
 
-                    ByteArrayOutputStream out = new ByteArrayOutputStream();
-                    if (ImageIO.write(sub, "png", out)) {
-                        UUID id = UUID.randomUUID();
-                        String texturePath = "textures/item/" + id + ".png";
-                        String modelPath = "models/item/" + id + ".json";
-                        TEXTURE_DATA.put(texturePath, out.toByteArray());
-                        DATA.put(Identifier.fromNamespaceAndPath(Sandstorm.MOD_ID, id.toString()), getModel("sandstorm:item/" + id, emissive));
-
-                        map.put(realI*1000 + currentFrame, new ModelData(Items.LEATHER_HORSE_ARMOR, Identifier.fromNamespaceAndPath(Sandstorm.MOD_ID,id.toString())));
-                    }
+                    map.put(realI * 1000 + currentFrame, createFrame(sub));
                 } // fori
 
                 realI++;
             }
 
 
-            POLYMER_MODEL_DATA.put(effectFile, map);
+            FRAME_DATA.put(effectFile, map);
         }
     }
 
-    private static byte[] getModel(String texturePath, boolean emissive) {
-        try (var inputStream = Sandstorm.class.getResourceAsStream(emissive ? "/template_model_emissive.json" : "/template_model.json")) {
-            assert inputStream != null;
-
-            String jsonString = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-            jsonString = jsonString.replace("@template", texturePath);
-            return jsonString.getBytes(StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+    private static SpriteFrame createFrame(BufferedImage image) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        if (!ImageIO.write(image, "png", out)) {
+            throw new IOException("Could not encode particle frame as PNG");
         }
+
+        UUID id = UUID.randomUUID();
+        String texturePath = "assets/sandstorm/textures/gui/sandstorm/generated/" + id + ".png";
+        RESOURCE_DATA.put(texturePath, out.toByteArray());
+        return new SpriteFrame(Identifier.fromNamespaceAndPath(Sandstorm.MOD_ID, "sandstorm/generated/" + id));
     }
+
+    public record SpriteFrame(Identifier sprite) {}
 }
